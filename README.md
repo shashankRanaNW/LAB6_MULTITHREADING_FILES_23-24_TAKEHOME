@@ -140,7 +140,7 @@ What to show:
 - All three clients then send LIST to server (user input). The server should display all connected users along with their ip address.
 - alice sends one message to bob using MSGC, bob replies back to that message using MSGC.
 - alice creates a group GoodOnes which has alice and bob.
-- bob sends HISF to get all conversation with alice. bob should get error message
+- bob sends HISF to get all 01 type conversation with alice. bob should get error message because bob is not the root user.
 - alice sends HISF to get all conversation with bob and should get the file.
 - alice sends a HISF to get all coversations in `02_GoodOnes.txt`. alice gets a blank file.
 - alice sends a BCST, as well as a MCST to `GoodOnes`.
