@@ -182,6 +182,14 @@ void handle_list()
     }
 }
 
+void handle_msgc(char msg[1024], struct client_info *client);
+
+void handle_mcst(char msg[1024], struct client_info *client);
+
+void * handle_bcst(char  msg[1024], struct client_info * client, int* retFlag);
+
+void handle_grps(char msg[1024], struct client_info *client);
+
 void *recv_worker(void *arg)
 {
     struct client_info *client;
@@ -229,187 +237,24 @@ void *recv_worker(void *arg)
 
         else if (!strncmp(msg, "MSGC:", 5))
         {
-            char *token = strtok(msg, ":");
-            token = strtok(NULL, "@");
-
-            char username[1024] = {0};
-            strcpy(username, token);
-
-            token = strtok(NULL, ":");
-            char ip_addr[1024] = {0};
-            strcpy(ip_addr, token);
-            token = strtok(NULL, "\n");
-            char msg[1024] = {0};
-            strcpy(msg, token);
-
-            // fprintf( stdout, "username:%s\nip_addr:%s\nmsg:%s\n", username, ip_addr, msg);
-            // fflush( stdout );
-
-            char reply[1024] = {0};
-            strcpy(reply, client->username);
-            strcat(reply, "@");
-            strcat(reply, ip_addr);
-            strcat(reply, ":");
-            strcat(reply, msg);
-            strcat(reply, "\n");
-
-            fprintf(stdout, "reply:%s", reply);
-
-            int user_found = 0;
-
-            for (int i = 0; i < NUM_CLIENTS; i++)
-            {
-                if (!strcmp(username, clients[i].username) && clients[i].active == 1)
-                {
-                    send_data(clients[i], reply);
-                    user_found = 1;
-                }
-            }
-
-            if (user_found == 0)
-                send_data(*client, "USER NOT FOUND\n");
+            handle_msgc(msg, client);
         }
 
         else if (!strncmp(msg, "BCST:", 5))
         {
-            char *token = strtok(msg, ":");
-            token = strtok(NULL, ":");
-
-            char *reply;
-            reply = strdup(client->username);
-            strcat(reply, ":");
-            strcat(reply, token);
-
-            for (int i = 0; i < NUM_CLIENTS; i++)
-            {
-                if ((client->client_id != clients[i].client_id) && clients[i].active == 1)
-                    send_data(clients[i], reply);
-            }
+            int retFlag;
+            void * retVal = handle_bcst(msg, client, &retFlag);
+            if (retFlag == 1) return retVal;    
         }
 
         else if (!strncmp(msg, "GRPS:", 5))
         {
-            sem_wait(group_sem);
-            char *token;
-            char *names;
-            char *groupname;
-
-            token = strtok(msg, ":");
-            token = strtok(NULL, ":");
-
-            names = strdup(token);
-
-            token = strtok(NULL, ":");
-            groupname = strdup(token);
-            groupname[strlen(groupname) - 1] = '\0'; // remove the \n
-
-            token = strdup(names);
-            token = strtok(token, ",");
-
-            int valid = 1;
-            while (token)
-            {
-                char usrn[64] = {0};
-                char ip_addr[64] = {0};
-                strcpy(usrn, strtok(token, "@"));
-                strcpy(ip_addr, strtok(NULL, "~"));
-                int found = 0;
-                for (int i = 0; i < NUM_CLIENTS; i++)
-                {
-                    if (!strcmp(clients[i].username, usrn) && clients[i].active == 1)
-                    {
-                        found = 1;
-                        break;
-                    }
-                }
-                if (!found)
-                {
-                    send_data(*client, "INVALID USERS LIST\n");
-                    valid = 0;
-                    break;
-                }
-                token = strtok(NULL, ",");
-            }
-
-            if (valid)
-            {
-                strcpy(groups[group_count].groupname, groupname);
-
-                token = strtok(names, ",");
-                int user_count = 0;
-
-                while (token)
-                {
-                    char usrn[64] = {0};
-                    char ip_addr[64] = {0};
-                    sscanf(token, "%[^@]@%s", usrn, ip_addr);
-                    for (int i = 0; i < NUM_CLIENTS; i++)
-                    {
-                        if (!strcmp(clients[i].username, usrn))
-                        {
-                            groups[group_count].users[user_count] = &clients[i];
-                        }
-                    }
-                    token = strtok(NULL, ",");
-                    user_count++;
-                }
-
-                groups[group_count].num_users = user_count;
-
-                char data[100];
-                sprintf(data, "GROUP %s CREATED\n", groups[group_count].groupname);
-                for (int i = 0; i < groups[group_count].num_users; i++)
-                {
-                    fprintf(stdout, "Member %d: %s\n", i + 1, groups[group_count].users[i]->username);
-                    fflush(stdout);
-                }
-
-                send_data(*client, data);
-                group_count++;
-            }
-            sem_post(group_sem);
+            handle_grps(msg, client);
         }
 
         else if (!strncmp(msg, "MCST:", 5))
         {
-            sem_wait(group_sem);
-            char *token = strtok(msg, ":");
-            token = strtok(NULL, ":");
-
-            int grpidx = -1;
-
-            for (int i = 0; i < group_count; i++)
-            {
-                if (!strcmp(token, groups[i].groupname))
-                    grpidx = i;
-            }
-
-            if (grpidx == -1)
-            {
-                char data[100];
-                sprintf(data, "GROUP %s NOT FOUND\n", token);
-                send_data(*client, data);
-            }
-
-            if (grpidx != -1)
-            {
-                char data[1024] = {0};
-                strcpy(data, client->username);
-                strcat(data, "@");
-                strcat(data, client->ip_add);
-                strcat(data, ":");
-
-                token = strtok(NULL, ":");
-                strcat(data, token);
-
-                for (int i = 0; i < groups[grpidx].num_users; i++)
-                {
-                    struct client_info *recv_client = groups[grpidx].users[i];
-                    if (recv_client->active == 1)
-                        send_data(*recv_client, data);
-                }
-            }
-            sem_post(group_sem);
+            handle_mcst(msg, client);
         }
 
         else if (!strcmp(msg, "HIST\n"))
@@ -488,7 +333,6 @@ void *recv_worker(void *arg)
                     else
                     {
                         // Process the command with the given name
-                        
                     }
                 }
                 else if (file_type == 3)
@@ -513,6 +357,256 @@ void *recv_worker(void *arg)
     }
 }
 
+void handle_grps(char msg[1024], struct client_info *client)
+{
+    sem_wait(group_sem);
+    char *token;
+    char *names;
+    char *groupname;
+
+    token = strtok(msg, ":");
+    token = strtok(NULL, ":");
+
+    names = strdup(token);
+
+    token = strtok(NULL, ":");
+    groupname = strdup(token);
+    groupname[strlen(groupname) - 1] = '\0'; // remove the \n
+
+    token = strdup(names);
+    token = strtok(token, ",");
+
+    int valid = 1;
+    while (token)
+    {
+        char usrn[64] = {0};
+        char ip_addr[64] = {0};
+        strcpy(usrn, strtok(token, "@"));
+        strcpy(ip_addr, strtok(NULL, "~"));
+        int found = 0;
+        for (int i = 0; i < NUM_CLIENTS; i++)
+        {
+            if (!strcmp(clients[i].username, usrn) && clients[i].active == 1)
+            {
+                found = 1;
+                break;
+            }
+        }
+        if (!found)
+        {
+            send_data(*client, "INVALID USERS LIST\n");
+            valid = 0;
+            break;
+        }
+        token = strtok(NULL, ",");
+    }
+
+    if (valid)
+    {
+        strcpy(groups[group_count].groupname, groupname);
+
+        token = strtok(names, ",");
+        int user_count = 0;
+
+        while (token)
+        {
+            char usrn[64] = {0};
+            char ip_addr[64] = {0};
+            sscanf(token, "%[^@]@%s", usrn, ip_addr);
+            for (int i = 0; i < NUM_CLIENTS; i++)
+            {
+                if (!strcmp(clients[i].username, usrn))
+                {
+                    groups[group_count].users[user_count] = &clients[i];
+                }
+            }
+            token = strtok(NULL, ",");
+            user_count++;
+        }
+
+        groups[group_count].num_users = user_count;
+
+        char data[100];
+        sprintf(data, "GROUP %s CREATED\n", groups[group_count].groupname);
+        for (int i = 0; i < groups[group_count].num_users; i++)
+        {
+            fprintf(stdout, "Member %d: %s\n", i + 1, groups[group_count].users[i]->username);
+            fflush(stdout);
+        }
+
+        send_data(*client, data);
+        group_count++;
+    }
+    sem_post(group_sem);
+}
+
+void * handle_bcst(char  msg[1024], struct client_info * client, int* retFlag){
+    retFlag = 1;
+    char *token = strtok(msg, ":");
+    token = strtok(NULL, ":");
+
+    char *reply;
+    reply = strdup(client->username);
+    strcat(reply, ":");
+    strcat(reply, token);
+
+    for (int i = 0; i < NUM_CLIENTS; i++)
+    {
+        if ((client->client_id != clients[i].client_id) && clients[i].active == 1)
+            send_data(clients[i], reply);
+    }
+
+    // Handle broadcast message
+    char bcst_file[] = "03_bcst.txt";
+    FILE *file = fopen(bcst_file, "a");
+    if (file == NULL)
+    {
+        file = fopen(bcst_file, "w");
+        if (file == NULL)
+        {
+            perror("Error opening file");
+            return NULL;
+        }
+    }
+    fprintf(file, "%s", reply );
+    fclose(file);        
+    retFlag = 0;
+    return NULL;
+}
+
+void handle_mcst(char msg[1024], struct client_info *client){
+    sem_wait(group_sem);
+    char *token = strtok(msg, ":");
+    token = strtok(NULL, ":");
+
+    int grpidx = -1;
+
+    for (int i = 0; i < group_count; i++)
+    {
+        if (!strcmp(token, groups[i].groupname))
+            grpidx = i;
+    }
+
+    if (grpidx == -1)
+    {
+        char data[100];
+        sprintf(data, "GROUP %s NOT FOUND\n", token);
+        send_data(*client, data);
+    }
+
+    if (grpidx != -1)
+    {
+        char data[1024] = {0};
+        strcpy(data, client->username);
+        strcat(data, "@");
+        strcat(data, client->ip_add);
+        strcat(data, ":");
+
+        token = strtok(NULL, ":");
+        strcat(data, token);
+
+        for (int i = 0; i < groups[grpidx].num_users; i++)
+        {
+            struct client_info *recv_client = groups[grpidx].users[i];
+            if (recv_client->active == 1)
+                send_data(*recv_client, data);
+        }
+
+        FILE *file;
+        char filename[1024] = "02_";
+        strcat(filename, groups[grpidx].groupname);
+        strcat(filename, ".txt");
+
+        file = fopen(filename, "a");
+        if (file == NULL)
+        {
+            file = fopen(filename, "w");
+        }
+
+        if (file != NULL)
+        {
+            fprintf(file, "%s", data);
+            fflush( file);
+            fclose(file);
+        }
+        else
+        {
+            printf("Error opening file!\n");   
+        }
+    }    
+    sem_post(group_sem);
+}
+
+void handle_msgc(char* msg, struct client_info *client)
+{
+    char *token = strtok(msg, ":");
+    token = strtok(NULL, "@");
+
+    char username[1024] = {0};
+    strcpy(username, token);
+
+    token = strtok(NULL, ":");
+    char ip_addr[1024] = {0};
+    strcpy(ip_addr, token);
+    token = strtok(NULL, "\n");
+    char mess[1024] = {0};
+    strcpy(mess, token);
+
+    // fprintf( stdout, "username:%s\nip_addr:%s\nmsg:%s\n", username, ip_addr, msg);
+    // fflush( stdout );
+
+    char reply[1024] = {0};
+    strcpy(reply, client->username);
+    strcat(reply, "@");
+    strcat(reply, ip_addr);
+    strcat(reply, ":");
+    strcat(reply, mess);
+    strcat(reply, "\n");
+
+    fprintf(stdout, "reply:%s", reply);
+
+    int user_found = 0;
+
+    for (int i = 0; i < NUM_CLIENTS; i++)
+    {
+        if (!strcmp(username, clients[i].username) && clients[i].active == 1)
+        {
+            send_data(clients[i], reply);
+            if( strcmp( client->username, clients[i].username ) < 0 ){
+                char file_n[1024] = {0};
+                strcpy( file_n, "01_");
+                strcat( file_n, client->username );
+                strcat( file_n, "_" );
+                strcat( file_n, clients[i].username );
+                strcat( file_n, ".txt" );
+                FILE *file = fopen( file_n, "a" );
+                fprintf( file, "%s", reply );
+                fclose( file );
+            }
+            else{
+                char file_n[1024] = {0};
+                strcpy( file_n, "01_");
+                strcat( file_n, clients[i].username );
+                strcat( file_n, "_" );
+                strcat( file_n, client->username );
+                strcat( file_n, ".txt" );
+                FILE *file = fopen( file_n, "a" );
+                fprintf( file, "%s", reply );
+                fclose( file );
+            }
+            user_found = 1;
+        }
+    }
+
+    if (user_found == 0)
+        send_data(*client, "USER NOT FOUND\n");
+
+    char file_n[1024] = {0};
+    strcpy( file_n, "01_");
+    
+
+    
+}
 
 void *connect_thread(void *args)
 {
