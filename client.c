@@ -99,6 +99,11 @@
             }
             fprintf( stdout, "%s", reply);
             fflush( stdout );
+
+            if(strncmp(reply, "EROR:", 5) == 0) {
+                close(socket_id);
+                exit(1);
+            }
         }
         pthread_exit(NULL);
     }

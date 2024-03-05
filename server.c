@@ -280,7 +280,7 @@ void *recv_worker(void *arg)
             else
             {
                 char err[1024] = {0};
-                strcpy(err, "UNAUTHORIZED\n");
+                strcpy(err, "EROR:UNAUTHORIZED\n");
                 send_data(*client, err);
             }
         }
@@ -327,7 +327,7 @@ void *recv_worker(void *arg)
                 {
                     if (name == NULL)
                     {
-                        send_data(*client, "Bad format HISF command\n");
+                        send_data(*client, "EROR:Bad format HISF command\n");
                     }
                     else if( 1 == file_type)
                     {
@@ -453,7 +453,7 @@ void *recv_worker(void *arg)
                 }
                 else
                 {
-                    send_data(*client, "Bad format HISF command\n");
+                    send_data(*client, "EROR:Bad format HISF command\n");
                 }
             }
             else
@@ -464,7 +464,7 @@ void *recv_worker(void *arg)
             }
         }
         else{
-            send_data(*client, "INVALID COMMAND\n");
+            send_data(*client, "EROR:INVALID COMMAND\n");
         }
     }
 }
@@ -506,7 +506,7 @@ void handle_grps(char msg[1024], struct client_info *client)
         }
         if (!found)
         {
-            send_data(*client, "INVALID USERS LIST\n");
+            send_data(*client, "EROR:INVALID USERS LIST\n");
             valid = 0;
             break;
         }
@@ -602,7 +602,7 @@ void handle_mcst(char msg[1024], struct client_info *client){
     if (grpidx == -1)
     {
         char data[100];
-        sprintf(data, "GROUP %s NOT FOUND\n", token);
+        sprintf(data, "EROR:GROUP %s NOT FOUND\n", token);
         send_data(*client, data);
     }
 
@@ -781,7 +781,7 @@ void *connect_thread(void *args)
                 // printf("You entered:\t%s\n", password);
                 // printf("PASSWORD REJECTED\n");
                 // fflush(stdout);
-                strcpy(msg, "ERROR:PASSWORD REJECTED\n");
+                strcpy(msg, "EROR:PASSWORD REJECTED\n");
                 send_data(clients[count], msg);
                 close(clients[count].client_id);
                 clients[count].active = -1;
