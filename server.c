@@ -167,11 +167,10 @@ void handle_list()
             strcat(list, ":");
         }
     }
-
     int len = strlen(list);
     if (len > 0)
         list[len - 1] = '\n';
-    printf("%s", list);
+    fprintf( stdout, "%s", list);
     fflush(stdout);
     for (int i = 0; i < NUM_CLIENTS; i++)
     {
@@ -311,18 +310,18 @@ void *recv_worker(void *arg)
                     opt_token = strtok(NULL, "|");
                 }
 
-                // fprintf(stdout, "Received file_type: %d\n", file_type);
-                // fflush(stdout);
-                // if (name[0] == '\0')
-                // {
-                //     fprintf(stdout, "No name received, name is NULL\n");
-                //     fflush(stdout);
-                // }
-                // else
-                // {
-                //     fprintf(stdout, "Received name: %s\n", name);
-                //     fflush(stdout);
-                // }
+                fprintf(stdout, "Received file_type: %d\n", file_type);
+                fflush(stdout);
+                if (name[0] == '\0')
+                {
+                    fprintf(stdout, "No name received, name is NULL\n");
+                    fflush(stdout);
+                }
+                else
+                {
+                    fprintf(stdout, "Received name: %s\n", name);
+                    fflush(stdout);
+                }
 
                 if (file_type == 1 || file_type == 2)
                 {
@@ -330,14 +329,127 @@ void *recv_worker(void *arg)
                     {
                         send_data(*client, "Bad format HISF command\n");
                     }
-                    else
+                    else if( 1 == file_type)
                     {
+                        char usrn[64] = {0};
+                        char ip_addr[64] = {0};
+                        sscanf(name, "%[^@]@%s", usrn, ip_addr);
                         // Process the command with the given name
+                        char file_n[1024] = {0};
+                        FILE *file ;
+                        if( strcmp( client->username, usrn ) < 0 ){
+                            strcpy( file_n, "01_");
+                            strcat( file_n, client->username );
+                            strcat( file_n, "@" );
+                            strcat( file_n, client->ip_add );
+                            strcat( file_n, "_" );
+                            strcat( file_n, usrn );
+                            strcat( file_n, "@" );
+                            strcat( file_n, ip_addr );
+                            strcat( file_n, ".txt" );
+                            file = fopen( file_n, "r" );
+                        }
+                        else{
+                            strcpy( file_n, "01_");
+                            strcat( file_n, usrn );
+                            strcat( file_n, "@" );
+                            strcat( file_n, ip_addr );
+                            strcat( file_n, "_" );
+                            strcat( file_n, client->username );
+                            strcat( file_n, "@" );
+                            strcat( file_n, client->ip_add );
+                            strcat( file_n, ".txt" );
+                            file = fopen( file_n, "r" );
+                        }
+                        
+                        if( NULL == file){
+                            char buffer[1024] = {0};
+                            file = fopen( file_n, "w" );
+                            while(fgets(buffer, sizeof(buffer), file) != NULL){
+                                send_data(*client, buffer);
+                                memset( buffer, 0, 1024);
+                            }
+                            fclose(file);
+                        }
+                        else{
+                            char buffer[1024] = {0};
+                            while(fgets(buffer, sizeof(buffer), file) != NULL){
+                                send_data(*client, buffer);
+                                memset( buffer, 0, 1024);
+                            }
+                            fclose(file);
+                        }
+
+                    }
+                    else{
+                        //group message
+                        for( int i = 0; i < group_count; i++){
+                            if( !strcmp( groups[i].groupname, name ) ){
+
+                                // Check if the client's username is in the group's member list
+                                int is_member = 0;
+                                for (int j = 0; j < groups[i].num_users; j++) {
+                                    if (strcmp(groups[i].users[j]->username, client->username) == 0) {
+                                        is_member = 1;
+                                        break;
+                                    }
+                                }
+
+                                // Only send the file if the client is a member of the group
+                                if (is_member) {
+                                    char file_n[1024] = {0};
+                                    strcpy( file_n, "02_");
+                                    strcat( file_n, name );
+                                    strcat( file_n, ".txt" );
+                                    FILE *file = fopen( file_n, "r" );
+                                    if( NULL == file){
+                                        char buffer[1024] = {0};
+                                        file = fopen( file_n, "w" );
+                                        while(fgets(buffer, sizeof(buffer), file) != NULL){
+                                            send_data(*client, buffer);
+                                            memset( buffer, 0, 1024);
+                                        }
+                                        fclose(file);
+                                    }
+                                    else{
+                                        char buffer[1024] = {0};
+                                        while(fgets(buffer, sizeof(buffer), file) != NULL){
+                                            send_data(*client, buffer);
+                                            memset( buffer, 0, 1024);
+                                        }
+                                        fclose(file);
+                                    }
+                                } else {
+                                    send_data(*client, "EROR:UNAUTHORIZED\n");
+                                }
+                                
+                                break;
+                            }
+                        }
                     }
                 }
                 else if (file_type == 3)
                 {
                     // Process the command for broadcast
+                    char file_n[1024] = {0};
+                    FILE *file = fopen("03_bcst.txt", "r");
+                    if( NULL == file){
+                        file = fopen("03_bcst.txt", "w");
+                        char buffer[1024] = {0};
+                        while(fgets(buffer, sizeof(buffer), file) != NULL){
+                            send_data(*client, buffer);
+                            memset( buffer, 0, 1024);
+                        }
+                        fclose(file);
+                    }
+                    else{
+                        char buffer[1024] = {0};
+                        while(fgets(buffer, sizeof(buffer), file) != NULL){
+                            send_data(*client, buffer);
+                            memset( buffer, 0, 1024);
+                        }
+                        fclose(file);
+                    }
                 }
                 else
                 {
@@ -441,7 +553,7 @@ void handle_grps(char msg[1024], struct client_info *client)
 }
 
 void * handle_bcst(char  msg[1024], struct client_info * client, int* retFlag){
-    retFlag = 1;
+    *retFlag = 1;
     char *token = strtok(msg, ":");
     token = strtok(NULL, ":");
 
@@ -470,7 +582,7 @@ void * handle_bcst(char  msg[1024], struct client_info * client, int* retFlag){
     }
     fprintf(file, "%s", reply );
     fclose(file);        
-    retFlag = 0;
+    *retFlag = 0;
     return NULL;
 }
 
@@ -552,8 +664,15 @@ void handle_msgc(char* msg, struct client_info *client)
     char mess[1024] = {0};
     strcpy(mess, token);
 
-    // fprintf( stdout, "username:%s\nip_addr:%s\nmsg:%s\n", username, ip_addr, msg);
-    // fflush( stdout );
+    fprintf(stdout, "Client Information:\n");
+    fprintf(stdout, "Username: %s\n", client->username);
+    fprintf(stdout, "IP Address: %s\n", client->ip_add);
+    fprintf(stdout, "Active: %d\n", client->active);
+    fflush(stdout);
+    
+
+    fprintf( stdout, "username:%s\nip_addr:%s\nmsg:%s\n", username, ip_addr, msg);
+    fflush( stdout );
 
     char reply[1024] = {0};
     strcpy(reply, client->username);
@@ -564,6 +683,7 @@ void handle_msgc(char* msg, struct client_info *client)
     strcat(reply, "\n");
 
     fprintf(stdout, "reply:%s", reply);
+    fflush( stdout );
 
     int user_found = 0;
 
@@ -576,8 +696,12 @@ void handle_msgc(char* msg, struct client_info *client)
                 char file_n[1024] = {0};
                 strcpy( file_n, "01_");
                 strcat( file_n, client->username );
+                strcat( file_n, "@" );
+                strcat( file_n, client->ip_add );
                 strcat( file_n, "_" );
                 strcat( file_n, clients[i].username );
+                strcat( file_n, "@" );
+                strcat( file_n, clients[i].ip_add );
                 strcat( file_n, ".txt" );
                 FILE *file = fopen( file_n, "a" );
                 fprintf( file, "%s", reply );
@@ -587,8 +711,12 @@ void handle_msgc(char* msg, struct client_info *client)
                 char file_n[1024] = {0};
                 strcpy( file_n, "01_");
                 strcat( file_n, clients[i].username );
+                strcat( file_n, "@" );
+                strcat( file_n, clients[i].ip_add );
                 strcat( file_n, "_" );
                 strcat( file_n, client->username );
+                strcat( file_n, "@" );
+                strcat( file_n, client->ip_add );
                 strcat( file_n, ".txt" );
                 FILE *file = fopen( file_n, "a" );
                 fprintf( file, "%s", reply );

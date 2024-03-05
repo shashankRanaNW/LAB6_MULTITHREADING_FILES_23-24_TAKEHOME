@@ -1,2 +1,0 @@
-usr2@1:mess
-usr1@2:mess2
