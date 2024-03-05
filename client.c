@@ -32,7 +32,8 @@
      
         if(inet_pton(AF_INET, addr, &server_addrinfo.sin_addr) <= 0)
     	{
-            printf("\nInvalid address/ Address not supported \n");
+            fprintf( stdout,"\nInvalid address/ Address not supported \n");
+            fflush( stdout );
             close(client_sockfd);
             exit(1);
         }
@@ -42,7 +43,8 @@
         if(connect(client_sockfd, (struct sockaddr*)&server_addrinfo, sizeof(server_addrinfo)) == -1)
     	{ // client connects if server port has started listen()ing and queue is non-full; however server connects to client only when it accept()s
             
-    		printf("Could not find server");	
+    		fprintf( stdout,"Could not find server");	
+            fflush( stdout );
             close(client_sockfd);
             exit(1);
         }
@@ -95,7 +97,8 @@
             {
                 break;
             }
-            printf("%s", reply);
+            fprintf( stdout, "%s", reply);
+            fflush( stdout );
         }
         pthread_exit(NULL);
     }
@@ -104,7 +107,8 @@
     {
         if (argc != 3)
     	{
-    		printf("Use 2 cli arguments\n");
+    		fprintf( stdout,"Use 2 cli arguments\n");
+            fflush( stdout );
     		return -1;
     	}
         

@@ -216,20 +216,30 @@ void* recv_worker(void* arg) {
         else if (!strncmp(msg, "MSGC:", 5)) 
         {
             char* token = strtok(msg, ":");
-            token = strtok(NULL, ":");
+            token = strtok(NULL, "@");
             
-            char* username;
-            username = strdup(token);
+            char username[1024] = {0};
+            strcpy( username, token);
     
             token = strtok(NULL, ":");
-            char* msg;
-    
-            msg = strdup(token);
-    
-            char* reply;
-            reply = strdup(client->username);
+            char ip_addr[1024] = {0};
+            strcpy( ip_addr, token);
+            token = strtok(NULL, "\n");
+            char msg[1024]= {0};
+            strcpy( msg, token);
+
+            fprintf( stdout, "username:%s\nip_addr:%s\nmsg:%s\n", username, ip_addr, msg);
+            fflush( stdout );
+
+            char reply[1024] = {0};
+            strcpy( reply ,client->username);
+            strcat(reply, "@");
+            strcat( reply , ip_addr);
             strcat(reply, ":");
             strcat(reply, msg);
+            strcat( reply, "\n");
+
+            fprintf( stdout, "reply:%s", reply);
     
             int user_found = 0;
     
