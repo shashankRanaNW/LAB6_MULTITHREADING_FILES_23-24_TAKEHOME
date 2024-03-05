@@ -9,7 +9,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <semaphore.h>
-    
+
 #define NUM_CLIENTS 1024
 #define NUM_GROUPS 2048
     
@@ -124,16 +124,58 @@ void send_data(struct client_info client, char* reply) {
     int send_count;
     
     // 6. SEND
-    if((send_count = send(client.client_id, reply, strlen(reply), 0)) == -1){
+    if((send_count = send(client.client_id, reply, 1024, 0)) == -1){
         perror("send");
         close(client.client_id);
         exit(1);
     }
 }
 
+void handle_list()
+{
+    char list[1024];
+    memset(list, 0, 1024);
+    strcpy(list, "LIST-");
+    for (int i = 0; i < NUM_CLIENTS; i++)
+    {
+        if (clients[i].active == 1)
+        {
+            strcat(list, clients[i].username);
+            strcat(list, "@");
+            strcat(list, clients[i].ip_add);
+            strcat(list, "|");
+            if (clients[i].auth == 'r')
+            {
+                strcat(list, "r");
+            }
+            else
+            {
+                strcat(list, "n");
+            }
+            strcat(list, ":");
+        }
+    }
+
+    int len = strlen(list);
+    if (len > 0)
+        list[len - 1] = '\n';
+    printf("%s", list);
+    fflush(stdout);
+    for (int i = 0; i < NUM_CLIENTS; i++)
+    {
+        if (1 == clients[i].active)
+        {
+            send_data(clients[i], list);
+        }
+    }
+}
+
 void* recv_worker(void* arg) {
     struct client_info* client;
     client = (struct client_info*)arg;
+
+    // new client joined, send the list
+    handle_list();
     
     char msg[1024];
     while (1) {
@@ -157,67 +199,18 @@ void* recv_worker(void* arg) {
         {   
             client->active = -1;
             close(client->client_id);
-            char list[1024];
-            memset(list, 0, 1024);
-            strcpy(list, "LIST-");
-            for (int i=0; i<NUM_CLIENTS; i++) 
-            {
-                if (clients[i].active == 1) 
-                {
-                    strcat(list,clients[i].username);
-                    strcat(list, "|");
-                    if(clients[i].auth == 'r')
-                    {
-                        strcat(list, "r");
-                    }
-                    else
-                    {
-                        strcat(list, "n");
-                    }
-                    strcat(list,":");
-                }
-            }
-    
-            int len = strlen(list);
-            if (len>0) list[len-1] = '\n';
-            
-            for (int i=0; i<NUM_CLIENTS; i++) 
-            {	
-                if ((client->client_id != clients[i].client_id) && clients[i].active==1)
-                    send_data(clients[i], list);
-            }
+            handle_list();
 
             pthread_exit(0);
         } 
     
+        /*
+        * When the server receives this command it sends a string containing the names of all the clients that are currently connected to in a new format: LIST-<name1>@<ip_addr1>|<authority1>:<name2>@<ip_addr2>|<authority2>:<name3>@<ip_addr3>|<authority3>\n
+        * The server will also broadcast this list to all exiting connected clients when any new client joins, or when an existing client exits. (1 mark)
+        */
         else if (!strcmp(msg, "LIST\n")) 
         {
-            char list[1024];
-            memset(list, 0, 1024);
-            strcpy(list, "LIST-");
-            for (int i=0; i<NUM_CLIENTS; i++) 
-            {
-                if (clients[i].active == 1) 
-                {
-                    strcat(list,clients[i].username);
-                    strcat(list, "|");
-                    if(clients[i].auth == 'r')
-                    {
-                        strcat(list, "r");
-                    }
-                    else
-                    {
-                        strcat(list, "n");
-                    }
-                    strcat(list,":");
-                }
-            }
-    
-            int len = strlen(list);
-            if (len>0) list[len-1] = '\n';
-            printf("%s\n", list);
-            fflush(stdout);
-            send_data(*client, list);
+            handle_list();
         }
     
         else if (!strncmp(msg, "MSGC:", 5)) 
@@ -417,7 +410,7 @@ void* recv_worker(void* arg) {
     }
     
 }
-    
+
 void* connect_thread(void* args) {
     for (int count=0; count<NUM_CLIENTS; count++) {
         char username[64] = {0};
@@ -461,7 +454,7 @@ void* connect_thread(void* args) {
                 // printf("You entered:\t%s\n", password);
                 // printf("PASSWORD REJECTED\n");
                 // fflush(stdout);
-                strcpy(msg, "PASSWORD REJECTED\n");
+                strcpy(msg, "ERROR:PASSWORD REJECTED\n");
                 send_data(clients[count], msg);
                 close(clients[count].client_id);
                 clients[count].active = -1;
